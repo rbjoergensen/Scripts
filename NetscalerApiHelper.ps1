@@ -1,4 +1,3 @@
-Clear
 if ($Endpoint -eq $null){$Endpoint = "https://<something.net>/nitro/v1"; Write-Host "Endpoint not specified as Endpoint variable. Defaulting to $Endpoint" -ForegroundColor Magenta}
 if ($NSCred -eq $null){$NSCred = get-credential}
 $Session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
