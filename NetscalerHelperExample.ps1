@@ -2,7 +2,7 @@
 $Endpoint = "https://lb-lan.cotv.net/nitro/v1"
 $AppName  = "MyApp"
 $AppEnv   = "Staging"
-$FrontIp  = "10.122.4.100"
+$FrontIp  = "10.1.4.100"
 $LBVS     = "LBVS_"+$AppName+"_"+$AppEnv+"_HTTPS"
 $SG       = "SG_"+$AppName+"_"+$AppEnv+"_HTTPS"
 $MON      = "MON_"+$AppName+"_"+$AppEnv+"_HTTPS_"
