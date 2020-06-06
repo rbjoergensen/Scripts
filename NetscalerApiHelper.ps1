@@ -179,7 +179,9 @@ Function Logout (){
     $ErrorActionPreference="Stop"
     try{
         Write-host "Logout" -ForegroundColor Green
-        $Response = invoke-webrequest -Uri "$Endpoint/config/logout" -Method:POST -Body '{"logout":{}}' -WebSession $Session -ContentType "application/json" 
+        $Response = invoke-webrequest -Uri "$Endpoint/config/logout" -Method:POST -Body '{"logout":{}}' -WebSession $Session -ContentType "application/json"
+        $Endpoint = $null
+        $NSCred = $null
         return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
     }
     catch
