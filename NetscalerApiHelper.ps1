@@ -1,5 +1,3 @@
-if ($Endpoint -eq $null){$Endpoint = "https://<something.net>/nitro/v1"; Write-Host "Endpoint not specified as Endpoint variable. Defaulting to $Endpoint" -ForegroundColor Magenta}
-if ($NSCred -eq $null){$NSCred = get-credential}
 $Session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
 Function Help (){
     Clear-Host
@@ -112,8 +110,56 @@ Function Help (){
         Bind a Certificate to a Loadbalancing Virtual Server
         Examples:
             Bind-CertTo-Lbvs -LBVS "LBVS_MyServer_HTTPS" -Cert "MyCert"
+
+    - Bind-CertTo-Ca
+        Link a Certificate to an installed Certificate Authority
+        Examples:
+            Bind-CertTo-Ca -Cert "MyCert" -Ca "CotvIssuingCA"  
+
+    - Get-CertExpiration
+        Get the expiration time in days of an installed Certificate
+        Examples:
+            Get-CertExpiration -Name "MyCert"
+
+    - Get-CertFilenames
+        Get the filenames on a currently installed Certificate to delete them after updating
+        Examples:
+            Get-CertFilenames -Name "MyCert"
+
+    - Update-Cert
+        Update an installed Certificate with a new cert and key
+        The new files must have a new unique name, like an appended timestamp
+        Examples:
+            Update-Cert -Name "MyCert" -Cert "MyCert_06062020-152530.cer" -Key "MyCert_06062020-152530.key"
+
+    - Bind-CipherGroup
+        Bind an existing ciphergroup by its name to a Loadbalancing Virtual Server
+        Examples:
+            Bind-CipherGroup -Lbvs "LBVS_MyServer_HTTPS" -CipherGroup "HIGHSECURITYCIPHERS"
+
+    - Unbind-CipherGroup
+        Unbind a ciphergroup by its name from a Loadbalancing Virtual Server
+        Examples:
+            Unbind-CipherGroup -Lbvs "LBVS_MyServer_HTTPS" -CipherGroup "DEFAULT"
+
+    - New-SslProfile
+        Create a new SSLProfile
+        Examples:
+            New-SslProfile -Name "Custom_Profile" -ssl3 DISABLED -tls1 DISABLED -tls11 DISABLED -tls12 ENABLED -tls13 ENABLED -HSTS ENABLED -IncludeSubdomains YES
+
+    - Delete-SslProfile
+        Delete an SSLProfile
+        Examples:
+            Delete-SslProfile -Name "Custom_Profile"
+
+    - Bind-SslProfile
+        Bind an SSLProfile to a Loadbalancing Virtual Server
+        Examples:
+            Bind-SslProfile -Lbvs "LBVS_MyServer_HTTPS" -SslProfile "Custom_Profile"
     '
 }
+if ($Endpoint -eq $null){Write-Host 'Endpoint not specified, please set $Endpoint variable like this. "https://hostname.domain.net/nitro/v1"' -ForegroundColor Magenta; Help; Return;}
+if ($NSCred -eq $null){$NSCred = get-credential}
 Function Login (){
     $Error.Clear()
     $ErrorActionPreference="Stop"
@@ -129,10 +175,10 @@ Function Login (){
     }
 }
 Function Logout (){
-    Write-host "Logout" -ForegroundColor Green
     $Error.Clear()
     $ErrorActionPreference="Stop"
     try{
+        Write-host "Logout" -ForegroundColor Green
         $Response = invoke-webrequest -Uri "$Endpoint/config/logout" -Method:POST -Body '{"logout":{}}' -WebSession $Session -ContentType "application/json" 
         return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
     }
@@ -142,240 +188,541 @@ Function Logout (){
     }
 }
 Function CommitChanges (){
-	Write-host "CommitChanges" -ForegroundColor Green
     $Error.Clear()
     $ErrorActionPreference="Stop"
     try{
-    $Response = invoke-webrequest -Uri "$Endpoint/config/nsconfig?action=save" -Method:POST -Body '{"nsconfig":{}}' -WebSession $Session -ContentType "application/json" 
-    return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
-    }catch{$error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message}
-}
-Function New-Lbvs ($Name, $Type, $Port, $IpAddress){
-    Write-host "Lbvserver" -ForegroundColor Green
-    $Error.Clear()
-    $ErrorActionPreference="Stop"
-    try{
-    $Body = '{"lbvserver":{"name":"'+$Name+'","ipv46":"'+$IpAddress+'","port":"'+$Port+'","servicetype":"'+$Type+'"}}'
-    $Response = invoke-webrequest -Uri "$Endpoint/config/lbvserver" -Method:POST -Body $Body -WebSession $Session -ContentType "application/json"
-    return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
-    }catch{$error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message}
-}
-Function New-Server ($Name, $IpAddress){
-    Write-host "Server: $Name, $IpAddress" -ForegroundColor Green
-    $Error.Clear()
-    $ErrorActionPreference="Stop"
-    try{
-    $Body = '{
-    "server":
-        {
-            "name":"'+ $Name +'", 
-            "ipaddress":"'+ $IpAddress +'"
-        }
-    }'
-    $Response = invoke-webrequest -Uri "$Endpoint/config/server" -Method:POST -Body $Body -WebSession $Session -ContentType "application/json"
-    return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
-    }catch{$error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message}
-}
-Function New-ServiceGroup ($Name, $Type){
-    Write-host "ServiceGroup" -ForegroundColor Green
-    $Error.Clear()
-    $ErrorActionPreference="Stop"
-    try{
-    $Body = '{
-    “servicegroup":
-        {
-            "servicegroupname":"'+ $Name +'", 
-            ”servicetype":"'+ $Type +'"
-        }
-    }'
-    $Response = invoke-webrequest -Uri "$Endpoint/config/servicegroup" -Method:POST -Body $Body -WebSession $Session -ContentType "application/json"
-    return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
-    }catch{$error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message}
-}
-Function New-Monitor ($Name, $Endpoint, $ResponseCode, $Secure){
-    Write-host "Monitor" -ForegroundColor Green
-    $Error.Clear()
-    $ErrorActionPreference="Stop"
-    try{
-    if ($Secure -eq "true")
+        Write-host "CommitChanges" -ForegroundColor Green
+        $Response = invoke-webrequest -Uri "$Endpoint/config/nsconfig?action=save" -Method:POST -Body '{"nsconfig":{}}' -WebSession $Session -ContentType "application/json" 
+        return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
+    }
+    catch
     {
+        $error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message
+    }
+}
+Function New-Lbvs (){
+    param(
+        [Parameter(Mandatory=$true)] [ValidateSet('ssl','http')] [string[]] $Type,
+        [Parameter(Mandatory=$true)] [string[]] $Name,
+        [Parameter(Mandatory=$true)] [string[]] $Port,
+        [Parameter(Mandatory=$true)] [string[]] $IpAddress
+    )
+    $Error.Clear()
+    $ErrorActionPreference="Stop"
+    try{
+        Write-host "New-Lbvs" -ForegroundColor Green
+        $Body = '{"lbvserver":{"name":"'+$Name+'","ipv46":"'+$IpAddress+'","port":"'+$Port+'","servicetype":"'+$Type+'"}}'
+        $Response = invoke-webrequest -Uri "$Endpoint/config/lbvserver" -Method:POST -Body $Body -WebSession $Session -ContentType "application/json"
+        return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
+    }
+    catch
+    {
+        $error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message
+    }
+}
+Function New-Server (){
+    param(
+        [Parameter(Mandatory=$true)] [string[]] $Name,
+        [Parameter(Mandatory=$true)] [string[]] $IpAddress
+    )
+    $Error.Clear()
+    $ErrorActionPreference="Stop"
+    try{
+        Write-host "New-Server: $Name, $IpAddress" -ForegroundColor Green
         $Body = '{
-        “lbmonitor":
+        "server":
             {
-                "monitorname":"'+ $Name +'",
-                "type":"HTTP",
-                ”httprequest”:”GET '+ $Endpoint +'”,
-                "respcode":["'+ $ResponseCode +'"],
-                "secure":"yes"
+                "name":"'+ $Name +'", 
+                "ipaddress":"'+ $IpAddress +'"
             }
         }'
+        $Response = invoke-webrequest -Uri "$Endpoint/config/server" -Method:POST -Body $Body -WebSession $Session -ContentType "application/json"
+        return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
     }
-    else
+    catch
     {
+        $error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message
+    }
+}
+Function New-ServiceGroup (){
+    param(
+        [Parameter(Mandatory=$true)] [string[]] $Name,
+        [Parameter(Mandatory=$true)] [ValidateSet('ssl','http')] [string[]] $Type
+    )
+    $Error.Clear()
+    $ErrorActionPreference="Stop"
+    try{
+        Write-host "New-ServiceGroup" -ForegroundColor Green
         $Body = '{
-        “lbmonitor":
+        “servicegroup":
             {
-                "monitorname":"'+ $Name +'",
-                "type":"HTTP",
-                ”httprequest”:”GET '+ $Endpoint +'”,
-                "respcode":["'+ $ResponseCode +'"],
-                "secure":"no"
+                "servicegroupname":"'+ $Name +'", 
+                ”servicetype":"'+ $Type +'"
             }
         }'
+        $Response = invoke-webrequest -Uri "$Endpoint/config/servicegroup" -Method:POST -Body $Body -WebSession $Session -ContentType "application/json"
+        return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
     }
-    $Response = invoke-webrequest -Uri "$Endpoint/config/lbmonitor" -Method:POST -Body $Body -WebSession $Session -ContentType "application/json"
-    return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
-    }catch{$error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message}
+    catch
+    {
+        $error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message
+    }
 }
-Function Bind-SgMember ($Name, $Port, $Member){
-    Write-host "SGMemberBinding: $Member, $Port" -ForegroundColor Green
+Function New-Monitor (){
+    param(
+        [Parameter(Mandatory=$true)] [string[]] $Name,
+        [Parameter(Mandatory=$true)] [string[]] $Endpoint,
+        [Parameter(Mandatory=$true)] [string[]] $ResponseCode,
+        [Parameter(Mandatory=$true)] [ValidateSet('true','false')] [string[]] $Secure
+    )
     $Error.Clear()
     $ErrorActionPreference="Stop"
     try{
-    $Body = '{
-    “servicegroup_servicegroupmember_binding":
+        Write-host "New-Monitor" -ForegroundColor Green
+        if ($Secure -eq "true")
         {
-            "servicegroupname":“'+ $Name +'",
-            "port":'+ $Port +',
-            ”servername”:”'+ $Member +'”
+            $Body = '{
+            “lbmonitor":
+                {
+                    "monitorname":"'+ $Name +'",
+                    "type":"HTTP",
+                    ”httprequest”:”GET '+ $Endpoint +'”,
+                    "respcode":["'+ $ResponseCode +'"],
+                    "secure":"yes"
+                }
+            }'
         }
-    }'
-    $Response = invoke-webrequest -Uri "$Endpoint/config/servicegroup_servicegroupmember_binding" -Method:POST -Body $Body -WebSession $Session -ContentType "application/json"
-    return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
-    }catch{$error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message}
-}
-Function Bind-SgMonitor ($Monitor, $ServiceGroup){
-    Write-host "MonitorBinding" -ForegroundColor Green
-    $Error.Clear()
-    $ErrorActionPreference="Stop"
-    try{
-    $Body = '{
-        “lbmonitor_servicegroup_binding":
+        else
         {
-            "monitorname":"'+ $Monitor +'",
-            "servicegroupname":"'+ $ServiceGroup +'"
+            $Body = '{
+            “lbmonitor":
+                {
+                    "monitorname":"'+ $Name +'",
+                    "type":"HTTP",
+                    ”httprequest”:”GET '+ $Endpoint +'”,
+                    "respcode":["'+ $ResponseCode +'"],
+                    "secure":"no"
+                }
+            }'
         }
-    }'
-    $Response = invoke-webrequest -Uri "$Endpoint/config/lbmonitor_servicegroup_binding" -Method:POST -Body $Body -WebSession $Session -ContentType "application/json"
-    return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
-    }catch{$error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message}
+        $Response = invoke-webrequest -Uri "$Endpoint/config/lbmonitor" -Method:POST -Body $Body -WebSession $Session -ContentType "application/json"
+        return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
+    }
+    catch
+    {
+        $error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message
+    }
 }
-Function Bind-Lbvs ($ServiceGroup, $Lbvserver){
-    Write-host "LbvserverBinding" -ForegroundColor Green
+Function Bind-SgMember (){
+    param(
+        [Parameter(Mandatory=$true)] [string[]] $Name,
+        [Parameter(Mandatory=$true)] [string[]] $Port,
+        [Parameter(Mandatory=$true)] [string[]] $Member
+    )
     $Error.Clear()
     $ErrorActionPreference="Stop"
     try{
-    $Body = '{"lbvserver_servicegroup_binding":{"servicegroupname":"'+ $ServiceGroup +'","name":"'+ $Lbvserver +'"}}'
-    $Response = invoke-webrequest -Uri "$Endpoint/config/lbvserver_servicegroup_binding/Lbs_k8s_test-b_nginx" -Method:POST -Body $Body -WebSession $Session -ContentType "application/json"
-    return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
-    }catch{$error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message}
+        Write-host "Bind-SgMember: $Member, $Port" -ForegroundColor Green
+        $Body = '{
+        “servicegroup_servicegroupmember_binding":
+            {
+                "servicegroupname":“'+ $Name +'",
+                "port":'+ $Port +',
+                ”servername”:”'+ $Member +'”
+            }
+        }'
+        $Response = invoke-webrequest -Uri "$Endpoint/config/servicegroup_servicegroupmember_binding" -Method:POST -Body $Body -WebSession $Session -ContentType "application/json"
+        return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
+    }
+    catch
+    {
+        $error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message
+    }
 }
-Function Delete-Lbvs ($Name){
-    Write-host "DeleteLbvserver: $Name" -ForegroundColor Green
+Function Bind-SgMonitor (){
+    param(
+        [Parameter(Mandatory=$true)] [string[]] $Monitor,
+        [Parameter(Mandatory=$true)] [string[]] $ServiceGroup
+    )
     $Error.Clear()
     $ErrorActionPreference="Stop"
     try{
-    $Body = '{"lbvserver":{"name":"'+$Name+'","ipv46":"'+$IpAddress+'","port":"'+$Port+'","servicetype":"'+$Type+'"}}'
-    $Response = invoke-webrequest -Uri "$Endpoint/config/lbvserver/$Name" -Method:DELETE -WebSession $Session -ContentType "application/json"
-    return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
-    }catch{$error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message}
+        Write-host "Bind-SgMonitor" -ForegroundColor Green
+        $Body = '{
+            “lbmonitor_servicegroup_binding":
+            {
+                "monitorname":"'+ $Monitor +'",
+                "servicegroupname":"'+ $ServiceGroup +'"
+            }
+        }'
+        $Response = invoke-webrequest -Uri "$Endpoint/config/lbmonitor_servicegroup_binding" -Method:POST -Body $Body -WebSession $Session -ContentType "application/json"
+        return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
+    }
+    catch
+    {
+        $error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message
+    }
 }
-Function Delete-ServiceGroup ($Name){
-    Write-host "DeleteServiceGroup: $Name" -ForegroundColor Green
+Function Bind-Lbvs (){
+    param(
+        [Parameter(Mandatory=$true)] [string[]] $ServiceGroup,
+        [Parameter(Mandatory=$true)] [string[]] $Lbvserver
+    )
     $Error.Clear()
     $ErrorActionPreference="Stop"
     try{
-    $Response = invoke-webrequest -Uri "$Endpoint/config/servicegroup/$Name" -Method:DELETE -WebSession $Session -ContentType "application/json"
-    return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
-    }catch{$error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message}
+        Write-host "Bind-Lbvs" -ForegroundColor Green
+        $Body = '{"lbvserver_servicegroup_binding":{"servicegroupname":"'+ $ServiceGroup +'","name":"'+ $Lbvserver +'"}}'
+        $Response = invoke-webrequest -Uri "$Endpoint/config/lbvserver_servicegroup_binding/Lbs_k8s_test-b_nginx" -Method:POST -Body $Body -WebSession $Session -ContentType "application/json"
+        return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
+    }
+    catch
+    {
+        $error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message
+    }
 }
-Function Delete-Server ($Name){
-    Write-host "DeleteServer: $Name" -ForegroundColor Green
+Function Delete-Lbvs (){
+    param(
+        [Parameter(Mandatory=$true)] [string[]] $Name
+    )
     $Error.Clear()
     $ErrorActionPreference="Stop"
     try{
-    $Response = invoke-webrequest -Uri "$Endpoint/config/server/$Name" -Method:DELETE -WebSession $Session -ContentType "application/json"
-    return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
-    }catch{$error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message}
+        Write-host "Delete-Lbvs: $Name" -ForegroundColor Green
+        $Body = '{"lbvserver":{"name":"'+$Name+'","ipv46":"'+$IpAddress+'","port":"'+$Port+'","servicetype":"'+$Type+'"}}'
+        $Response = invoke-webrequest -Uri "$Endpoint/config/lbvserver/$Name" -Method:DELETE -WebSession $Session -ContentType "application/json"
+        return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
+    }
+    catch
+    {
+        $error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message
+    }
 }
-Function Delete-Monitor ($Name){
-    Write-host "DeleteMonitor: $Name" -ForegroundColor Green
+Function Delete-ServiceGroup (){
+    param(
+        [Parameter(Mandatory=$true)] [string[]] $Name
+    )
     $Error.Clear()
     $ErrorActionPreference="Stop"
     try{
-    $Response = invoke-webrequest -Uri ("$Endpoint/config/lbmonitor/"+$Name+"?args=type:HTTP") -Method:DELETE -WebSession $Session -ContentType "application/json"
-    return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
-    }catch{$error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message}
+        Write-host "Delete-ServiceGroup: $Name" -ForegroundColor Green
+        $Response = invoke-webrequest -Uri "$Endpoint/config/servicegroup/$Name" -Method:DELETE -WebSession $Session -ContentType "application/json"
+        return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
+    }
+    catch
+    {
+        $error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message
+    }
 }
-Function Upload-Cert($Name, $LocalPath){
-    Write-host "UploadCert: $Name" -ForegroundColor Green
+Function Delete-Server (){
+    param(
+        [Parameter(Mandatory=$true)] [string[]] $Name
+    )
     $Error.Clear()
     $ErrorActionPreference="Stop"
     try{
+        Write-host "Delete-Server: $Name" -ForegroundColor Green
+        $Response = invoke-webrequest -Uri "$Endpoint/config/server/$Name" -Method:DELETE -WebSession $Session -ContentType "application/json"
+        return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
+    }
+    catch
+    {
+        $error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message
+    }
+}
+Function Delete-Monitor (){
+    param(
+        [Parameter(Mandatory=$true)] [string[]] $Name
+    )
+    $Error.Clear()
+    $ErrorActionPreference="Stop"
+    try{
+        Write-host "Delete-Monitor: $Name" -ForegroundColor Green
+        $Response = invoke-webrequest -Uri ("$Endpoint/config/lbmonitor/"+$Name+"?args=type:HTTP") -Method:DELETE -WebSession $Session -ContentType "application/json"
+        return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
+    }
+    catch
+    {
+        $error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message
+    }
+}
+Function Upload-Cert(){
+    param(
+        [Parameter(Mandatory=$true)] [string[]] $Name,
+        [Parameter(Mandatory=$true)] [string[]] $LocalPath
+    )
+    $Error.Clear()
+    $ErrorActionPreference="Stop"
+    try{
+        Write-host "Upload-Cert: $Name" -ForegroundColor Green
+        $Cert = Get-content $LocalPath | Select -Skip 1 | Select -SkipLast 1
+        $SingleLine = $null
+        foreach ($line in $cert){$SingleLine += $line}
+        $Base64 = $SingleLine.Replace(" ","")
 
-    $Cert = Get-content $LocalPath | Select -Skip 1 | Select -SkipLast 1
-    $SingleLine = $null
-    foreach ($line in $cert){$SingleLine += $line}
-    $Base64 = $SingleLine.Replace(" ","")
-
-    $Body = '{"systemfile":{"filename":"'+ $Name +'","filelocation":"/nsconfig/ssl/","filecontent":"'+ $Base64 +'","fileencoding":"BASE64"}}'
-    $Response = invoke-webrequest -Uri "$Endpoint/config/systemfile" -Method:POST -Body $Body -WebSession $Session -ContentType "application/json"
-    return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
-    }catch{$error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message}
+        $Body = '{"systemfile":{"filename":"'+ $Name +'","filelocation":"/nsconfig/ssl/","filecontent":"'+ $Base64 +'","fileencoding":"BASE64"}}'
+        $Response = invoke-webrequest -Uri "$Endpoint/config/systemfile" -Method:POST -Body $Body -WebSession $Session -ContentType "application/json"
+        return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
+    }
+    catch
+    {
+        $error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message
+    }
 }
-Function Install-Cert($Name, $Cert, $Key){
-    Write-host "InstallCert: $Name" -ForegroundColor Green
+Function Update-Cert(){
+    param(
+        [Parameter(Mandatory=$true)] [string[]] $Name,
+        [Parameter(Mandatory=$true)] [string[]] $Cert,
+        [Parameter(Mandatory=$true)] [string[]] $Key
+    )
     $Error.Clear()
     $ErrorActionPreference="Stop"
     try{
-    $Body = '{"sslcertkey":{"certkey":"'+$Name+'","cert":"'+$Cert+'","key":"'+$Key+'"}}'
-    $Response = invoke-webrequest -Uri "$Endpoint/config/sslcertkey" -Method:POST -Body $Body -WebSession $Session -ContentType "application/json"
-    return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
-    }catch{$error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message}
+        Write-host "Update-Cert: $Name" -ForegroundColor Green
+        $Body = '{"sslcertkey":{"certkey":"'+$Name+'","cert":"'+$Cert+'","key":"'+$Key+'"}}'
+        $Response = invoke-webrequest -Uri "$Endpoint/config/sslcertkey?action=update" -Method:POST -Body $Body -WebSession $Session -ContentType "application/json"
+        return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
+    }
+    catch
+    {
+        $error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message
+    }
 }
-Function Install-CA($Name, $Cert){
-    Write-host "InstallCA: $Name" -ForegroundColor Green
+Function Install-Cert(){
+    param(
+        [Parameter(Mandatory=$true)] [string[]] $Name,
+        [Parameter(Mandatory=$true)] [string[]] $Cert,
+        [Parameter(Mandatory=$true)] [string[]] $Key
+    )
     $Error.Clear()
     $ErrorActionPreference="Stop"
     try{
-    $Body = '{"sslcertkey":{"certkey":"'+$Name+'","cert":"'+$Cert+'"}}' 
-    $Response = invoke-webrequest -Uri "$Endpoint/config/sslcertkey" -Method:POST -Body $Body -WebSession $Session -ContentType "application/json"
-    return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
-    }catch{$error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message}
+        Write-host "Install-Cert: $Name" -ForegroundColor Green
+        $Body = '{"sslcertkey":{"certkey":"'+$Name+'","cert":"'+$Cert+'","key":"'+$Key+'"}}'
+        $Response = invoke-webrequest -Uri "$Endpoint/config/sslcertkey" -Method:POST -Body $Body -WebSession $Session -ContentType "application/json"
+        return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
+    }
+    catch
+    {
+        $error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message
+    }
 }
-Function Uninstall-Cert($Name){
-    Write-host "UninstallCert: $Name" -ForegroundColor Green
+Function Install-CA(){
+    param(
+        [Parameter(Mandatory=$true)] [string[]] $Name,
+        [Parameter(Mandatory=$true)] [string[]] $Cert
+    )
     $Error.Clear()
     $ErrorActionPreference="Stop"
     try{
-    $Response = invoke-webrequest -Uri "$Endpoint/config/sslcertkey/$Name" -Method:DELETE -WebSession $Session -ContentType "application/json"
-    return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
-    }catch{$error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message}
+        Write-host "Install-CA: $Name" -ForegroundColor Green
+        $Body = '{"sslcertkey":{"certkey":"'+$Name+'","cert":"'+$Cert+'"}}' 
+        $Response = invoke-webrequest -Uri "$Endpoint/config/sslcertkey" -Method:POST -Body $Body -WebSession $Session -ContentType "application/json"
+        return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
+    }
+    catch
+    {
+        $error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message
+    }
 }
-Function Delete-Cert($Name){
-    Write-host "DeleteCert: $Name" -ForegroundColor Green
+Function Uninstall-Cert(){
+    param(
+        [Parameter(Mandatory=$true)] [string[]] $Name
+    )
     $Error.Clear()
     $ErrorActionPreference="Stop"
     try{
-    $Response = invoke-webrequest -Uri ("$Endpoint/config/systemfile/$Name" + "?args=filelocation:%2Fnsconfig%2Fssl") -Method:DELETE -WebSession $Session -ContentType "application/json"
-    return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
-    }catch{$error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message}
+        Write-host "Uninstall-Cert: $Name" -ForegroundColor Green
+        $Response = invoke-webrequest -Uri "$Endpoint/config/sslcertkey/$Name" -Method:DELETE -WebSession $Session -ContentType "application/json"
+        return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
+    }
+    catch
+    {
+        $error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message
+    }
 }
-Function Bind-CertTo-Lbvs($LBVS, $Cert){
-    Write-host "BindCertLbvs: $LBVS, $Cert" -ForegroundColor Green
+Function Get-CertExpiration(){
+    param(
+        [Parameter(Mandatory=$true)] [string[]] $Name
+    )
     $Error.Clear()
     $ErrorActionPreference="Stop"
     try{
-    $Body = '{"sslvserver_sslcertkey_binding":{"vservername":"'+$LBVS+'","certkeyname":"'+$Cert+'"}}'
-    $Response = invoke-webrequest -Uri "$Endpoint/config/sslvserver_sslcertkey_binding" -Method:POST -Body $Body -WebSession $Session -ContentType "application/json"
-    return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
-    }catch{$error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message}
+        Write-host "Get-CertExpiration: $Name" -ForegroundColor Green
+        $Response = invoke-webrequest -Uri ("$Endpoint/config/sslcertkey/$Name") -Method:GET -WebSession $Session -ContentType "application/json"
+        return $Response.Content | ConvertFrom-Json | Select -Expand sslcertkey | Select -Expand daystoexpiration
+    }
+    catch
+    {
+        $error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message
+    }
+}
+Function Get-CertFilenames(){
+    param(
+        [Parameter(Mandatory=$true)] [string[]] $Name
+    )
+    $Error.Clear()
+    $ErrorActionPreference="Stop"
+    try{
+        Write-host "Get-CertFilenames: $Name" -ForegroundColor Green
+        $Response = invoke-webrequest -Uri ("$Endpoint/config/sslcertkey/$Name") -Method:GET -WebSession $Session -ContentType "application/json"
+        Write-host "Get-CertFilenames Cert: $($Response.Content | ConvertFrom-Json | Select -Expand sslcertkey | Select -Expand cert)"
+        Write-host "Get-CertFilenames Key: $($Response.Content | ConvertFrom-Json | Select -Expand sslcertkey | Select -Expand key)"
+        return $Response.Content | ConvertFrom-Json | Select -Expand sslcertkey | Select cert, key
+    }
+    catch
+    {
+        $error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message
+    }
+}
+Function Delete-Cert(){
+    param(
+        [Parameter(Mandatory=$true)] [string[]] $Name
+    )
+    $Error.Clear()
+    $ErrorActionPreference="Stop"
+    try{
+        Write-host "Delete-Cert: $Name" -ForegroundColor Green
+        $Response = invoke-webrequest -Uri ("$Endpoint/config/systemfile/$Name" + "?args=filelocation:%2Fnsconfig%2Fssl") -Method:DELETE -WebSession $Session -ContentType "application/json"
+        return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
+    }
+    catch
+    {
+        $error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message
+    }
+}
+Function Bind-CertTo-Lbvs(){
+    param(
+        [Parameter(Mandatory=$true)] [string[]] $LBVS,
+        [Parameter(Mandatory=$true)] [string[]] $Cert
+    )
+    $Error.Clear()
+    $ErrorActionPreference="Stop"
+    try{
+        Write-host "Bind-CertTo-Lbvs: $LBVS, $Cert" -ForegroundColor Green
+        $Body = '{"sslvserver_sslcertkey_binding":{"vservername":"'+$LBVS+'","certkeyname":"'+$Cert+'"}}'
+        $Response = invoke-webrequest -Uri "$Endpoint/config/sslvserver_sslcertkey_binding" -Method:POST -Body $Body -WebSession $Session -ContentType "application/json"
+        return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
+    }
+    catch
+    {
+        $error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message
+    }
+}
+Function Bind-CertTo-Ca(){
+    param(
+        [Parameter(Mandatory=$true)] [string[]] $Cert,
+        [Parameter(Mandatory=$true)] [string[]] $Ca
+    )
+    $Error.Clear()
+    $ErrorActionPreference="Stop"
+    try{
+        Write-host "Bind-CertTo-Ca: $Cert, $Ca" -ForegroundColor Green
+        $Body = '{"sslcertkey":{"certkey":"'+$Cert+'","linkcertkeyname":"'+$Ca+'"}}'
+        $Response = invoke-webrequest -Uri "$Endpoint/config/sslcertkey?action=link" -Method:POST -Body $Body -WebSession $Session -ContentType "application/json"
+        return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
+    }
+    catch
+    {
+        $error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message
+    }
+}
+Function Bind-CipherGroup(){
+    param(
+        [Parameter(Mandatory=$true)] [ValidateSet('HIGHSECURITYCIPHERS', 'DEFAULT')] [string[]] $CipherGroup,
+        [Parameter(Mandatory=$true)] [string[]] $Lbvs
+    )
+    $Error.Clear()
+    $ErrorActionPreference="Stop"
+    try{
+        Write-host "Bind-CipherGroup: $Lbvs, $CipherGroup" -ForegroundColor Green
+        $Body = '{"sslvserver_sslcipher_binding":{"vservername":"'+$Lbvs+'","ciphername":"'+$CipherGroup+'"}}'
+        $Response = invoke-webrequest -Uri "$Endpoint/config/sslvserver_sslcipher_binding" -Method:PUT -Body $Body -WebSession $Session -ContentType "application/json"
+        return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
+    }
+    catch
+    {
+        $error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message
+    }
+}
+Function Unbind-CipherGroup(){
+    param(
+        [Parameter(Mandatory=$true)] [ValidateSet('HIGHSECURITYCIPHERS', 'DEFAULT')] [string[]] $CipherGroup,
+        [Parameter(Mandatory=$true)] [string[]] $Lbvs
+    )
+    $Error.Clear()
+    $ErrorActionPreference="Stop"
+    try{
+        Write-host "Unbind-CipherGroup: $Lbvs, $CipherGroup" -ForegroundColor Green
+        $Response = invoke-webrequest -Uri "$Endpoint/config/sslvserver_sslcipher_binding/$($lbvs)?args=ciphername:$CipherGroup" -Method:DELETE -Body $Body -WebSession $Session -ContentType "application/json"
+        return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
+    }
+    catch
+    {
+        $error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message
+    }
+}
+Function New-SslProfile(){
+    param(
+        [Parameter(Mandatory=$true)] [string[]] $Name,
+        [Parameter(Mandatory=$true)] [ValidateSet('ENABLED', 'DISABLED')] [string[]] $ssl3,
+        [Parameter(Mandatory=$true)] [ValidateSet('ENABLED', 'DISABLED')] [string[]] $tls1,
+        [Parameter(Mandatory=$true)] [ValidateSet('ENABLED', 'DISABLED')] [string[]] $tls11,
+        [Parameter(Mandatory=$true)] [ValidateSet('ENABLED', 'DISABLED')] [string[]] $tls12,
+        [Parameter(Mandatory=$true)] [ValidateSet('ENABLED', 'DISABLED')] [string[]] $tls13,
+        [Parameter(Mandatory=$true)] [ValidateSet('ENABLED', 'DISABLED')] [string[]] $HSTS,
+        [Parameter()] [int[]] $MaxAge = 1209600,
+        [Parameter()] [ValidateSet('YES', 'NO')] [string[]] $IncludeSubdomains="YES"
+    )
+    $Error.Clear()
+    $ErrorActionPreference="Stop"
+    try{
+        Write-host "New-SslProfile: $Name" -ForegroundColor Green
+        $Body = '{"sslprofile":{"name":"'+$Name+'","ssl3":"'+$ssl3+'","tls1":"'+$tls1+'","tls11":"'+$tls11+'","tls12":"'+$tls12+'","tls13":"'+$tls13+'","hsts":"'+$HSTS+'","maxage":"'+$MaxAge+'","includesubdomains":"'+$IncludeSubdomains+'"}}'
+        $Response = invoke-webrequest -Uri "$Endpoint/config/sslprofile" -Method:POST -Body $Body -WebSession $Session -ContentType "application/json"
+        return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
+    }
+    catch
+    {
+        $error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message
+    }
+}
+Function Delete-SslProfile(){
+    param(
+        [Parameter(Mandatory=$true)] [string[]] $Name
+    )
+    $Error.Clear()
+    $ErrorActionPreference="Stop"
+    try{
+        Write-host "Delete-SslProfile: $Name" -ForegroundColor Green
+        $Response = invoke-webrequest -Uri "$Endpoint/config/sslprofile/$Name" -Method:DELETE -Body $Body -WebSession $Session -ContentType "application/json"
+        return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
+    }
+    catch
+    {
+        $error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message
+    }
+}
+Function Bind-SslProfile(){
+    param(
+        [Parameter(Mandatory=$true)] [string[]] $SslProfile,
+        [Parameter(Mandatory=$true)] [string[]] $Lbvs
+    )
+    $Error.Clear()
+    $ErrorActionPreference="Stop"
+    try{
+        Write-host "Bind-SslProfile: $Lbvs, $CipherGroup" -ForegroundColor Green
+        $Body = '{"sslvserver":{"vservername":"'+$Lbvs+'","sslprofile":"'+$SslProfile+'"}}'
+        $Response = invoke-webrequest -Uri "$Endpoint/config/sslvserver" -Method:PUT -Body $Body -WebSession $Session -ContentType "application/json"
+        return ("StatusCode: " + $Response.StatusCode + " StatusDescription: " + $Response.StatusDescription)
+    }
+    catch
+    {
+        $error[0].ErrorDetails.Message | convertfrom-json | select -ExpandProperty message
+    }
 }
 
 <# ToDo Functions
-- Bind certificate to Root CA
-- Set Cipher Group (and remove default)
-- Set TLS versions
 - Create Content Switch Virtual Server
 - Create Content Switch Policy
 - Create Bindings for content switch objects
