@@ -61,10 +61,10 @@ KeyLength     : 2048
 Thumbprint    : 0000000000000000000000000000000000000000
 AllSANs       : {test.cotv.dk, www.test.cotv.dk}
 CertFile      : C:\Users\Solenya\AppData\Local\Posh-ACME\acme-staging-v02.api.letsencrypt.org\00000000\test.cotv.dk\cert.cer
-KeyFile       : C:\Users\Solenya\AppData\Local\Posh-ACME\acme-staging-v02.api.letsencrypt.org\14031526\test.cotv.dk\cert.key
-ChainFile     : C:\Users\Solenya\AppData\Local\Posh-ACME\acme-staging-v02.api.letsencrypt.org\14031526\test.cotv.dk\chain.cer
-FullChainFile : C:\Users\Solenya\AppData\Local\Posh-ACME\acme-staging-v02.api.letsencrypt.org\14031526\test.cotv.dk\fullchain.cer
-PfxFile       : C:\Users\Solenya\AppData\Local\Posh-ACME\acme-staging-v02.api.letsencrypt.org\14031526\test.cotv.dk\cert.pfx
-PfxFullChain  : C:\Users\Solenya\AppData\Local\Posh-ACME\acme-staging-v02.api.letsencrypt.org\14031526\test.cotv.dk\fullchain.pfx
+KeyFile       : C:\Users\Solenya\AppData\Local\Posh-ACME\acme-staging-v02.api.letsencrypt.org\00000000\test.cotv.dk\cert.key
+ChainFile     : C:\Users\Solenya\AppData\Local\Posh-ACME\acme-staging-v02.api.letsencrypt.org\00000000\test.cotv.dk\chain.cer
+FullChainFile : C:\Users\Solenya\AppData\Local\Posh-ACME\acme-staging-v02.api.letsencrypt.org\00000000\test.cotv.dk\fullchain.cer
+PfxFile       : C:\Users\Solenya\AppData\Local\Posh-ACME\acme-staging-v02.api.letsencrypt.org\00000000\test.cotv.dk\cert.pfx
+PfxFullChain  : C:\Users\Solenya\AppData\Local\Posh-ACME\acme-staging-v02.api.letsencrypt.org\00000000\test.cotv.dk\fullchain.pfx
 PfxPass       : System.Security.SecureString
 #>
